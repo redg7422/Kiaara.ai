@@ -14,43 +14,50 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v6
 
-      - name: Extract project ZIP
-        run: |
-          unzip -o nirmal-ai.zip -d extracted
-          echo "Extracted files:"
-          find extracted -maxdepth 4 -type f | head -100
-
-      - name: Find Android project
-        run: |
-          PROJECT_DIR=$(find extracted -type f \( -name "settings.gradle" -o -name "settings.gradle.kts" \) -exec dirname {} \; | head -1)
-          if [ -z "$PROJECT_DIR" ]; then
-            echo "Android Gradle project not found"
-            exit 1
-          fi
-          echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
-          echo "Android project found at: $PROJECT_DIR"
-
-      - name: Set up Java
-        uses: actions/setup-java@v4
+      - name: Setup Java
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '17'
 
-      - name: Set up Android SDK
+      - name: Setup Android SDK
         uses: android-actions/setup-android@v3
+
+      - name: Extract project ZIP
+        run: |
+          mkdir -p extracted
+          unzip -o normal-ai.zip -d extracted
+
+      - name: Find Android project
+        run: |
+          PROJECT_DIR=$(find extracted -type f \( -name "settings.gradle" -o -name "settings.gradle.kts" \) -print -quit | xargs -r dirname)
+
+          if [ -z "$PROJECT_DIR" ]; then
+            echo "Android Gradle project not found"
+            exit 1
+          fi
+
+          echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
+          echo "Found Android project at: $PROJECT_DIR"
+
+      - name: Install Gradle
+        uses: gradle/actions/setup-gradle@v6
+
+      - name: Generate Gradle wrapper if missing
+        working-directory: ${{ env.PROJECT_DIR }}
+        run: |
+          if [ ! -f gradlew ]; then
+            gradle wrapper
+          fi
+          chmod +x gradlew
 
       - name: Build APK
         working-directory: ${{ env.PROJECT_DIR }}
-        run: |
-          chmod +x gradlew
-          ./gradlew assembleDebug --no-daemon
-
-      - name: Find APK
-        run: |
-          find "${{ env.PROJECT_DIR }}" -type f -name "*.apk" -print
+        run: ./gradlew assembleDebug --stacktrace
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: Kiara-APK
-          path: ${{ env.PROJECT_DIR }}/**/build/outputs/apk/debug/*.apk
+          name: Kiara-debug-APK
+          path: |
+            ${{ env.PROJECT_DIR }}/app/build/outputs/apk/debug/*.apk
